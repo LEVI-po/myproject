@@ -1,9 +1,13 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const express = require("express");
 const { getStreams } = require("./providers/faselhd");
+
+const app = express();
+
+const PORT = process.env.PORT || 7000;
 
 const manifest = {
   id: "org.leivpo.faselhd",
-  version: "1.0.2",
+  version: "1.0.3",
   name: "FaselHD Nuvio",
   description: "FaselHD Arabic movies and TV",
   resources: ["stream"],
@@ -12,39 +16,46 @@ const manifest = {
   idPrefixes: ["tt"]
 };
 
-const builder = new addonBuilder(manifest);
+// CORS
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+  next();
+});
 
-builder.defineStreamHandler(async (args) => {
+// Manifest
+app.get("/manifest.json", (req, res) => {
+  res.json(manifest);
+});
+
+// Stream endpoint
+app.get("/stream/:type/:id.json", async (req, res) => {
   try {
-    console.log("Stream request:", args);
+    const type = req.params.type;
+    const rawId = req.params.id;
 
-    const type = args.type;
-    const id = args.id;
+    console.log("=================================");
+    console.log("Stream request");
+    console.log("Type:", type);
+    console.log("ID:", rawId);
 
-    if (!id) {
-      return { streams: [] };
-    }
-
-    // Stremio sends series IDs like:
-    // tt1234567:1:2
-    let tmdbId = id;
+    let tmdbId = rawId;
     let season = null;
     let episode = null;
 
+    // Series IDs may arrive as:
+    // tt1234567:1:2
     if (type === "series") {
-      const parts = id.split(":");
+      const parts = rawId.split(":");
 
       tmdbId = parts[0];
       season = parts[1] ? Number(parts[1]) : null;
       episode = parts[2] ? Number(parts[2]) : null;
     }
 
-    console.log("Resolved:", {
-      type,
-      tmdbId,
-      season,
-      episode
-    });
+    console.log("TMDB ID:", tmdbId);
+    console.log("Season:", season);
+    console.log("Episode:", episode);
 
     const streams = await getStreams(
       tmdbId,
@@ -53,23 +64,29 @@ builder.defineStreamHandler(async (args) => {
       episode
     );
 
-    console.log("Streams found:", streams?.length || 0);
+    console.log("Streams:", streams);
 
-    return {
+    res.json({
       streams: Array.isArray(streams) ? streams : []
-    };
+    });
 
   } catch (error) {
-    console.error("Stream handler error:", error);
+    console.error("STREAM ERROR:", error);
 
-    return {
+    res.json({
       streams: []
-    };
+    });
   }
 });
 
-// IMPORTANT:
-// serveHTTP must receive builder.getInterface()
-serveHTTP(builder.getInterface(), {
-  port: process.env.PORT || 7000
+// Health check
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "FaselHD Nuvio Backend"
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`FaselHD Nuvio running on port ${PORT}`);
 });
