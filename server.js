@@ -27,7 +27,8 @@ app.use((req, res, next) => {
 async function getHtml(url) {
   const response = await fetch(url, {
     headers: HEADERS,
-    redirect: "follow"
+    redirect: "follow",
+    signal: AbortSignal.timeout(10000)
   });
   if (!response.ok) {
     throw new Error("HTTP " + response.status);
@@ -141,7 +142,7 @@ app.get("/", (req, res) => {
 app.get("/manifest.json", (req, res) => {
   res.json({
     id: "org.leivpo.faselhd",
-    version: "2.0.2",
+    version: "2.0.3",
     name: "FaselHD Nuvio",
     description: "FaselHD Arabic movies and TV",
     resources: [
@@ -186,150 +187,144 @@ app.get("/manifest.json", (req, res) => {
 // =========================
 // CATALOG
 // =========================
-app.get(
-  "/catalog/:type/:id.json",
-  async (req, res) => {
-    try {
-      const type = req.params.type;
-      const search =
-        req.query.search ||
-        req.query.q ||
-        "";
-      console.log("[CATALOG]");
-      console.log("Type:", type);
-      console.log("Search:", search);
-      if (!search) {
-        return res.json({
-          metas: []
-        });
-      }
-      const results =
-        await searchFasel(search);
-      const metas =
-        results.slice(0, 20).map(
-          (item) => ({
-            id: item.url,
-            type:
-              type === "series"
-                ? "series"
-                : "movie",
-            name: item.title,
-            poster:
-              item.poster || undefined
-          })
-        );
-      console.log(
-        "[CATALOG] Results:",
-        metas.length
-      );
-      res.json({
-        metas
-      });
-    } catch (error) {
-      console.error(
-        "[CATALOG ERROR]",
-        error
-      );
-      res.json({
+app.get("/catalog/:type/:id.json", async (req, res) => {
+  try {
+    const type = req.params.type;
+    const search =
+      req.query.search ||
+      req.query.q ||
+      "";
+    console.log("[CATALOG]");
+    console.log("Type:", type);
+    console.log("Search:", search);
+    if (!search) {
+      return res.json({
         metas: []
       });
     }
+    const results = await searchFasel(search);
+    const metas = results
+      .slice(0, 20)
+      .map((item) => ({
+        id: item.url,
+        type:
+          type === "series"
+            ? "series"
+            : "movie",
+        name: item.title,
+        poster:
+          item.poster || undefined
+      }));
+    console.log(
+      "[CATALOG] Results:",
+      metas.length
+    );
+    res.json({
+      metas
+    });
+  } catch (error) {
+    console.error(
+      "[CATALOG ERROR]",
+      error
+    );
+    res.json({
+      metas: []
+    });
   }
-);
+});
 // =========================
 // META
 // =========================
-app.get(
-  "/meta/:type/:id.json",
-  async (req, res) => {
-    try {
-      const type = req.params.type;
-      const id =
-        decodeURIComponent(
-          req.params.id
-        );
-      console.log("[META]");
-      console.log("Type:", type);
-      console.log("ID:", id);
-      let pageUrl = id;
-      if (
-        !/^https?:\/\//i.test(pageUrl)
-      ) {
-        return res.json({
-          meta: {
-            id,
-            type,
-            name: "FaselHD",
-            videos: []
-          }
-        });
-      }
-      console.log(
-        "[META] Page:",
+app.get("/meta/:type/:id.json", async (req, res) => {
+  try {
+    const type = req.params.type;
+    const id =
+      decodeURIComponent(
+        req.params.id
+      );
+    console.log("[META]");
+    console.log("Type:", type);
+    console.log("ID:", id);
+    const pageUrl = id;
+    if (
+      !/^https?:\/\//i.test(
         pageUrl
-      );
-      const html =
-        await getHtml(pageUrl);
-      const episodes =
-        findEpisodes(html);
-      console.log(
-        "[META] Episodes:",
-        episodes.length
-      );
-      if (type !== "series") {
-        return res.json({
-          meta: {
-            id,
-            type: "movie",
-            name: "FaselHD",
-            videos: []
-          }
-        });
-      }
-      const videos =
-        episodes.map(
-          (ep, index) => ({
-            id:
-              id +
-              "|episode|" +
-              (ep.number ||
-                index + 1),
-            title:
-              ep.name ||
-              "Episode " +
-                (ep.number ||
-                  index + 1),
-            season: 1,
-            episode:
-              ep.number ||
-              index + 1,
-            overview: ""
-          })
-        );
-      res.json({
+      )
+    ) {
+      return res.json({
         meta: {
           id,
-          type: "series",
-          name: "FaselHD",
-          videos
-        }
-      });
-    } catch (error) {
-      console.error(
-        "[META ERROR]",
-        error
-      );
-      res.json({
-        meta: {
-          id: req.params.id,
-          type: req.params.type,
+          type,
           name: "FaselHD",
           videos: []
         }
       });
     }
+    console.log(
+      "[META] Page:",
+      pageUrl
+    );
+    const html =
+      await getHtml(pageUrl);
+    const episodes =
+      findEpisodes(html);
+    console.log(
+      "[META] Episodes:",
+      episodes.length
+    );
+    if (type !== "series") {
+      return res.json({
+        meta: {
+          id,
+          type: "movie",
+          name: "FaselHD",
+          videos: []
+        }
+      });
+    }
+    const videos =
+      episodes.map(
+        (ep, index) => ({
+          id:
+            id +
+            "|episode|" +
+            (ep.number ||
+              index + 1),
+          title:
+            ep.name ||
+            "Episode " +
+              (ep.number ||
+                index + 1),
+          season: 1,
+          episode:
+            ep.number ||
+            index + 1,
+          overview: ""
+        })
+      );
+    res.json({
+      meta: {
+        id,
+        type: "series",
+        name: "FaselHD",
+        videos
+      }
+    });
+  } catch (error) {
+    console.error(
+      "[META ERROR]",
+      error
+    );
+    res.json({
+      meta: {
+        id: req.params.id,
+        type: req.params.type,
+        name: "FaselHD",
+        videos: []
+      }
+    });
   }
-);
+});
 // =========================
 // STREAM
 // =========================
@@ -337,7 +332,8 @@ app.get(
   "/stream/:type/:id.json",
   async (req, res) => {
     try {
-      const type = req.params.type;
+      const type =
+        req.params.type;
       const id =
         decodeURIComponent(
           req.params.id
@@ -392,13 +388,17 @@ app.get(
         );
       console.log(
         "[STREAM] Found:",
-        Array.isArray(streams)
+        Array.isArray(
+          streams
+        )
           ? streams.length
           : 0
       );
       res.json({
         streams:
-          Array.isArray(streams)
+          Array.isArray(
+            streams
+          )
             ? streams
             : []
       });
@@ -424,46 +424,69 @@ app.get(
       "https://www.faselhd.tech/",
       "https://www.fasel-hd.co/"
     ];
-    const results = [];
-    for (const url of sites) {
-      const start = Date.now();
-      try {
-        const response = await fetch(url, {
-          headers: {
-            "User-Agent": UA,
-            "Accept": "text/html,application/xhtml+xml,*/*"
-          },
-          redirect: "follow",
-          signal: AbortSignal.timeout(15000)
-        });
-        const html =
-          await response.text();
-        results.push({
-          url,
-          status: "ok",
-          http: response.status,
-          finalUrl: response.url,
-          length: html.length,
-          timeMs:
-            Date.now() - start,
-          cloudflare:
-            /Just a moment|cf-chl|challenge-platform/i.test(
-              html
-            )
-        });
-      } catch (error) {
-        results.push({
-          url,
-          status: "error",
-          name: error.name,
-          message: error.message,
-          timeMs:
-            Date.now() - start
-        });
-      }
-    }
+    const results =
+      await Promise.all(
+        sites.map(
+          async (url) => {
+            const start =
+              Date.now();
+            try {
+              const response =
+                await fetch(
+                  url,
+                  {
+                    headers: {
+                      "User-Agent":
+                        UA,
+                      "Accept":
+                        "text/html,application/xhtml+xml,*/*"
+                    },
+                    redirect:
+                      "follow",
+                    signal:
+                      AbortSignal.timeout(
+                        8000
+                      )
+                  }
+                );
+              const html =
+                await response.text();
+              return {
+                url,
+                status: "ok",
+                http:
+                  response.status,
+                finalUrl:
+                  response.url,
+                length:
+                  html.length,
+                timeMs:
+                  Date.now() -
+                  start,
+                cloudflare:
+                  /Just a moment|cf-chl|challenge-platform/i.test(
+                    html
+                  )
+              };
+            } catch (error) {
+              return {
+                url,
+                status: "error",
+                name:
+                  error.name,
+                message:
+                  error.message,
+                timeMs:
+                  Date.now() -
+                  start
+              };
+            }
+          }
+        )
+      );
     res.json({
-      tested: results.length,
+      tested:
+        results.length,
       results
     });
   }
