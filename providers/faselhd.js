@@ -1,56 +1,47 @@
-const BASE_URL = "https://www.faselhds.life";
+const DB_URL =
+  "https://raw.githubusercontent.com/Ahmd3301/faselhd-db/main/output";
 
-async function fetchText(url) {
-  const response = await fetch(url);
+async function getDB(file) {
+  const res = await fetch(`${DB_URL}/${file}.json`);
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+  if (!res.ok) {
+    throw new Error(`DB error: ${res.status}`);
   }
 
-  return await response.text();
+  return await res.json();
 }
 
-function cleanText(text) {
-  return text
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
+function normalize(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
-function absoluteUrl(url) {
-  if (!url) return null;
-
-  if (url.startsWith("http")) {
-    return url;
-  }
-
-  return new URL(url, BASE_URL).href;
-}
-
 async function search(query) {
-  const url = `${BASE_URL}/?s=${encodeURIComponent(query)}`;
-  const html = await fetchText(url);
+  const db = await getDB("anime");
 
-  const results = [];
+  const items = Array.isArray(db)
+    ? db
+    : Array.isArray(db.items)
+      ? db.items
+      : [];
 
-  const regex =
-    /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const q = normalize(query);
 
-  let match;
+  return items
+    .filter(item => {
+      const name = normalize(item.name);
+      const slug = normalize(item.slug);
 
-  while ((match = regex.exec(html))) {
-    const url = absoluteUrl(match[1]);
-    const title = cleanText(match[2]);
-
-    if (!url || !title || title.length < 2) continue;
-
-    results.push({
-      title,
-      url
-    });
-  }
-
-  return results;
+      return name.includes(q) || slug.includes(q);
+    })
+    .slice(0, 20)
+    .map(item => ({
+      title: item.name,
+      url: item.link || item.url,
+      id: item.slug || item.id || item.link
+    }));
 }
 
 async function getStreams() {
