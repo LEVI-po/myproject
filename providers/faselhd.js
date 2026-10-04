@@ -1,47 +1,59 @@
-const DB_URL =
-  "https://raw.githubusercontent.com/Ahmd3301/faselhd-db/main/output";
+const BASE_URL = "https://www.fasel-hd.cam";
 
-async function getDB(file) {
-  const res = await fetch(`${DB_URL}/${file}.json`);
+async function fetchPage(url) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml"
+    }
+  });
 
-  if (!res.ok) {
-    throw new Error(`DB error: ${res.status}`);
+  if (!response.ok) {
+    throw new Error(`FaselHD HTTP ${response.status}`);
   }
 
-  return await res.json();
+  return await response.text();
 }
 
-function normalize(text) {
+function cleanText(text) {
   return String(text || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 async function search(query) {
-  const db = await getDB("anime");
+  const url = `${BASE_URL}/?s=${encodeURIComponent(query)}`;
+  const html = await fetchPage(url);
 
-  const items = Array.isArray(db)
-    ? db
-    : Array.isArray(db.items)
-      ? db.items
-      : [];
+  const results = [];
+  const seen = new Set();
 
-  const q = normalize(query);
+  const regex =
+    /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
-  return items
-    .filter(item => {
-      const name = normalize(item.name);
-      const slug = normalize(item.slug);
+  let match;
 
-      return name.includes(q) || slug.includes(q);
-    })
-    .slice(0, 20)
-    .map(item => ({
-      title: item.name,
-      url: item.link || item.url,
-      id: item.slug || item.id || item.link
-    }));
+  while ((match = regex.exec(html))) {
+    const url = match[1];
+    const title = cleanText(match[2]);
+
+    if (!url || !title || title.length < 2) continue;
+    if (!url.includes("fasel-hd.cam")) continue;
+    if (seen.has(url)) continue;
+
+    seen.add(url);
+
+    results.push({
+      title,
+      url
+    });
+
+    if (results.length >= 20) break;
+  }
+
+  return results;
 }
 
 async function getStreams() {
