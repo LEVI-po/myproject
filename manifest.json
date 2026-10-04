@@ -1,19 +1,33 @@
 {
   "id": "org.leivpo.faselhd",
   "name": "FaselHD Nuvio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scrapers": [
     {
       "id": "nuvio-faselhd-custom",
       "name": "FaselHD",
       "description": "FaselHD Arabic movies and TV",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Custom",
       "supportedTypes": ["movie", "tv"],
       "filename": "providers/faselhd.js",
       "enabled": true,
       "formats": [],
       "contentLanguage": ["ar"]
+    }
+  ],
+  "catalogs": [
+    {
+      "id": "faselhd-movies",
+      "name": "FaselHD Movies",
+      "type": "movie",
+      "genres": []
+    },
+    {
+      "id": "faselhd-series",
+      "name": "FaselHD Series",
+      "type": "tv",
+      "genres": []
     }
   ]
 }
