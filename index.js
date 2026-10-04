@@ -48,7 +48,7 @@ app.get("/stream/:type/:id.json", async (req, res) => {
       episode = Number(parts[2]);
     }
 
-    console.log("STREAM REQUEST", {
+    console.log("STREAM REQUEST:", {
       type,
       tmdbId,
       season,
