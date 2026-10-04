@@ -414,90 +414,58 @@ app.get(
   }
 );
 // =========================
-// TEST CLUB
-// =========================
-app.get(
-  "/test-club",
-  async (req, res) => {
-    try {
-      const response =
-        await fetch(
-          "https://faselhd.club/",
-          {
-            headers: {
-              "User-Agent": UA,
-              "Accept":
-                "text/html,application/xhtml+xml,*/*"
-            },
-            redirect: "follow"
-          }
-        );
-      const html =
-        await response.text();
-      res.json({
-        status: "ok",
-        http: response.status,
-        finalUrl: response.url,
-        length: html.length,
-        cloudflare:
-          /Just a moment|cf-chl|challenge-platform/i.test(
-            html
-          ),
-        hasPostList:
-          html.includes(
-            "postList"
-          ),
-        hasPlayer:
-          html.includes(
-            "player_iframe"
-          )
-      });
-    } catch (error) {
-      console.error(
-        "[TEST ERROR]",
-        error
-      );
-      res.status(500).json({
-        status: "error",
-        message: String(error)
-      });
-    }
-  }
-);
-// =========================
-// TEST FASELHD
+// TEST FASELHD DOMAINS
 // =========================
 app.get(
   "/test-fasel",
   async (req, res) => {
-    const url = "https://faselhd.cloud/";
-    try {
+    const sites = [
+      "https://faselhd.cloud/",
+      "https://www.faselhd.tech/",
+      "https://www.fasel-hd.co/"
+    ];
+    const results = [];
+    for (const url of sites) {
       const start = Date.now();
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": UA,
-          "Accept": "text/html,application/xhtml+xml,*/*"
-        },
-        redirect: "follow",
-        signal: AbortSignal.timeout(15000)
-      });
-      const html = await response.text();
-      res.json({
-        status: "ok",
-        http: response.status,
-        finalUrl: response.url,
-        length: html.length,
-        timeMs: Date.now() - start,
-        cloudflare:
-          /Just a moment|cf-chl|challenge-platform/i.test(html)
-      });
-    } catch (error) {
-      res.status(500).json({
-        status: "error",
-        name: error.name,
-        message: error.message
-      });
+      try {
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,*/*"
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000)
+        });
+        const html =
+          await response.text();
+        results.push({
+          url,
+          status: "ok",
+          http: response.status,
+          finalUrl: response.url,
+          length: html.length,
+          timeMs:
+            Date.now() - start,
+          cloudflare:
+            /Just a moment|cf-chl|challenge-platform/i.test(
+              html
+            )
+        });
+      } catch (error) {
+        results.push({
+          url,
+          status: "error",
+          name: error.name,
+          message: error.message,
+          timeMs:
+            Date.now() - start
+        });
+      }
     }
+    res.json({
+      tested: results.length,
+      results
+    });
   }
 );
 // =========================
