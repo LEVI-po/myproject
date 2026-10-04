@@ -1,10 +1,12 @@
 {
   "name": "faselhd-nuvio",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "description": "FaselHD Nuvio provider",
-  "type": "commonjs",
-  "main": "server.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "engines": {
     "node": ">=18"
   },
