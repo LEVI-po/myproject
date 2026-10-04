@@ -4,7 +4,6 @@ const { getStreams } = require("./providers/faselhd");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS + request logging
 app.use((req, res, next) => {
   console.log("[REQUEST]", req.method, req.originalUrl);
 
@@ -14,7 +13,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
+// Health
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -26,7 +25,7 @@ app.get("/", (req, res) => {
 app.get("/manifest.json", (req, res) => {
   res.json({
     id: "org.leivpo.faselhd",
-    version: "1.0.3",
+    version: "1.0.4",
     name: "FaselHD Nuvio",
     description: "FaselHD Arabic movies and TV",
     resources: ["stream"],
@@ -36,32 +35,28 @@ app.get("/manifest.json", (req, res) => {
   });
 });
 
-// Stream endpoint
+// Streams
 app.get("/stream/:type/:id.json", async (req, res) => {
   try {
-    const type = req.params.type;
-    const rawId = req.params.id;
+    const { type, id } = req.params;
 
-    console.log("=================================");
     console.log("[STREAM REQUEST]");
     console.log("Type:", type);
-    console.log("Raw ID:", rawId);
+    console.log("ID:", id);
 
-    let tmdbId = rawId;
+    let tmdbId = id;
     let season = null;
     let episode = null;
 
-    // TV:
-    // /stream/series/tt0944947:1:1.json
     if (type === "series") {
-      const parts = rawId.split(":");
+      const parts = id.split(":");
 
       tmdbId = parts[0];
       season = parts[1] ? Number(parts[1]) : null;
       episode = parts[2] ? Number(parts[2]) : null;
     }
 
-    console.log("[STREAM] TMDB ID:", tmdbId);
+    console.log("[STREAM] TMDB:", tmdbId);
     console.log("[STREAM] Season:", season);
     console.log("[STREAM] Episode:", episode);
 
@@ -87,14 +82,17 @@ app.get("/stream/:type/:id.json", async (req, res) => {
   }
 });
 
-// Test FaselHD connection
+// Source test
 app.get("/test-club", async (req, res) => {
   try {
     const r = await fetch("https://faselhd.club/", {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,*/*"
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+          "AppleWebKit/537.36 (KHTML, like Gecko) " +
+          "Chrome/140.0.0.0 Safari/537.36",
+        "Accept":
+          "text/html,application/xhtml+xml,*/*"
       },
       redirect: "follow"
     });
@@ -106,21 +104,24 @@ app.get("/test-club", async (req, res) => {
       http: r.status,
       finalUrl: r.url,
       length: html.length,
-      cloudflare: /Just a moment|cf-chl|challenge-platform/i.test(html),
+      cloudflare:
+        /Just a moment|cf-chl|challenge-platform/i.test(html),
       hasPostList: html.includes("postList"),
       hasPlayer: html.includes("player_iframe")
     });
 
-  } catch (e) {
-    console.error("[TEST ERROR]", e);
+  } catch (error) {
+    console.error("[TEST ERROR]", error);
 
     res.status(500).json({
       status: "error",
-      message: String(e)
+      message: String(error)
     });
   }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("FaselHD Nuvio Backend running on port " + PORT);
+  console.log(
+    "FaselHD Nuvio Backend running on port " + PORT
+  );
 });
