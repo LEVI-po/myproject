@@ -4,8 +4,11 @@
   "private": true,
   "description": "FaselHD Nuvio provider",
   "type": "commonjs",
-  "main": "providers/faselhd.js",
+  "main": "server.js",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
   }
 }
