@@ -10,11 +10,6 @@ async function fetchText(url) {
   return await response.text();
 }
 
-function absoluteUrl(url) {
-  if (!url) return null;
-  return new URL(url, BASE_URL).href;
-}
-
 function cleanText(text) {
   return text
     .replace(/<[^>]*>/g, " ")
@@ -22,11 +17,22 @@ function cleanText(text) {
     .trim();
 }
 
+function absoluteUrl(url) {
+  if (!url) return null;
+
+  if (url.startsWith("http")) {
+    return url;
+  }
+
+  return new URL(url, BASE_URL).href;
+}
+
 async function search(query) {
   const url = `${BASE_URL}/?s=${encodeURIComponent(query)}`;
   const html = await fetchText(url);
 
   const results = [];
+
   const regex =
     /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
@@ -47,21 +53,11 @@ async function search(query) {
   return results;
 }
 
-async function load(url) {
-  const html = await fetchText(url);
-
-  return {
-    url,
-    html
-  };
-}
-
 async function getStreams() {
   return [];
 }
 
 module.exports = {
   search,
-  load,
   getStreams
 };
