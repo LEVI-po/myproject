@@ -1,14 +1,10 @@
 const express = require("express");
+const { getStreams } = require("./providers/faselhd");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-  "AppleWebKit/537.36 (KHTML, like Gecko) " +
-  "Chrome/140.0.0.0 Safari/537.36";
-
-// CORS
+// CORS + request logging
 app.use((req, res, next) => {
   console.log("[REQUEST]", req.method, req.originalUrl);
 
@@ -18,7 +14,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health
+// Health check
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -30,7 +26,7 @@ app.get("/", (req, res) => {
 app.get("/manifest.json", (req, res) => {
   res.json({
     id: "org.leivpo.faselhd",
-    version: "1.0.2",
+    version: "1.0.3",
     name: "FaselHD Nuvio",
     description: "FaselHD Arabic movies and TV",
     resources: ["stream"],
@@ -43,14 +39,43 @@ app.get("/manifest.json", (req, res) => {
 // Stream endpoint
 app.get("/stream/:type/:id.json", async (req, res) => {
   try {
-    const { type, id } = req.params;
+    const type = req.params.type;
+    const rawId = req.params.id;
 
-    console.log("[STREAM]");
+    console.log("=================================");
+    console.log("[STREAM REQUEST]");
     console.log("Type:", type);
-    console.log("ID:", id);
+    console.log("Raw ID:", rawId);
+
+    let tmdbId = rawId;
+    let season = null;
+    let episode = null;
+
+    // TV:
+    // /stream/series/tt0944947:1:1.json
+    if (type === "series") {
+      const parts = rawId.split(":");
+
+      tmdbId = parts[0];
+      season = parts[1] ? Number(parts[1]) : null;
+      episode = parts[2] ? Number(parts[2]) : null;
+    }
+
+    console.log("[STREAM] TMDB ID:", tmdbId);
+    console.log("[STREAM] Season:", season);
+    console.log("[STREAM] Episode:", episode);
+
+    const streams = await getStreams(
+      tmdbId,
+      type === "series" ? "tv" : "movie",
+      season,
+      episode
+    );
+
+    console.log("[STREAM] Result:", streams);
 
     res.json({
-      streams: []
+      streams: Array.isArray(streams) ? streams : []
     });
 
   } catch (error) {
@@ -62,12 +87,13 @@ app.get("/stream/:type/:id.json", async (req, res) => {
   }
 });
 
-// Test FaselHD
+// Test FaselHD connection
 app.get("/test-club", async (req, res) => {
   try {
     const r = await fetch("https://faselhd.club/", {
       headers: {
-        "User-Agent": UA,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,*/*"
       },
       redirect: "follow"
@@ -86,6 +112,8 @@ app.get("/test-club", async (req, res) => {
     });
 
   } catch (e) {
+    console.error("[TEST ERROR]", e);
+
     res.status(500).json({
       status: "error",
       message: String(e)
