@@ -17,6 +17,7 @@ const HEADERS = {
   "Accept-Language": "ar,en;q=0.8"
 };
 
+// CORS + Logs
 app.use((req, res, next) => {
   console.log("[REQUEST]", req.method, req.originalUrl);
 
@@ -25,6 +26,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// =========================
+// HELPERS
+// =========================
 
 async function getHtml(url) {
   const r = await fetch(url, {
@@ -76,6 +81,10 @@ function htmlText(html) {
     .trim();
 }
 
+// =========================
+// FIND MOVIES / SERIES
+// =========================
+
 function findPosts(html) {
   const results = [];
 
@@ -103,6 +112,10 @@ function findPosts(html) {
 
   return results;
 }
+
+// =========================
+// FIND EPISODES
+// =========================
 
 function findEpisodes(html) {
   const episodes = [];
@@ -136,9 +149,15 @@ function findEpisodes(html) {
   return episodes;
 }
 
+// =========================
+// SEARCH
+// =========================
+
 async function searchFasel(query) {
   const url =
-    BASE + "/?s=" + encodeURIComponent(query).replace(/%20/g, "+");
+    BASE +
+    "/?s=" +
+    encodeURIComponent(query).replace(/%20/g, "+");
 
   console.log("[CATALOG] Search:", url);
 
@@ -147,7 +166,10 @@ async function searchFasel(query) {
   return findPosts(html);
 }
 
-// Health
+// =========================
+// HEALTH
+// =========================
+
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -155,22 +177,28 @@ app.get("/", (req, res) => {
   });
 });
 
-// Manifest
+// =========================
+// MANIFEST
+// =========================
+
 app.get("/manifest.json", (req, res) => {
   res.json({
     id: "org.leivpo.faselhd",
-    version: "2.0.0",
+    version: "2.0.1",
     name: "FaselHD Nuvio",
     description: "FaselHD Arabic movies and TV",
+
     resources: [
       "catalog",
       "meta",
       "stream"
     ],
+
     types: [
       "movie",
       "series"
     ],
+
     catalogs: [
       {
         type: "movie",
@@ -195,26 +223,34 @@ app.get("/manifest.json", (req, res) => {
         ]
       }
     ],
+
     idPrefixes: [
       "tt",
-      "tmdb"
+      "tmdb",
+      "faselhd"
     ]
   });
 });
 
-// Catalog
-app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
+// =========================
+// CATALOG
+// =========================
+
+// مهم:
+// لا تستخدم :extra?.json مع Express 5
+
+app.get("/catalog/:type/:id.json", async (req, res) => {
   try {
     const type = req.params.type;
-    const extra = req.params.extra || "";
 
-    const params = new URLSearchParams(extra);
+    const search =
+      req.query.search ||
+      req.query.q ||
+      "";
 
-    let search = params.get("search");
-
-    if (!search && req.query.search) {
-      search = req.query.search;
-    }
+    console.log("[CATALOG]");
+    console.log("Type:", type);
+    console.log("Search:", search);
 
     if (!search) {
       return res.json({
@@ -222,29 +258,41 @@ app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
       });
     }
 
-    console.log("[CATALOG]");
-    console.log("Type:", type);
-    console.log("Search:", search);
-
     const results = await searchFasel(search);
 
-    const metas = results.slice(0, 20).map((item, index) => ({
-      id: "faselhd-" + index + "-" +
-        Buffer.from(item.url).toString("base64url"),
+    const metas = results
+      .slice(0, 20)
+      .map((item, index) => ({
+        id:
+          "faselhd-" +
+          index +
+          "-" +
+          Buffer.from(item.url).toString("base64url"),
 
-      type: type === "series" ? "series" : "movie",
+        type:
+          type === "series"
+            ? "series"
+            : "movie",
 
-      name: item.title,
+        name: item.title,
 
-      poster: item.poster || undefined
-    }));
+        poster: item.poster || undefined
+      }));
+
+    console.log(
+      "[CATALOG] Results:",
+      metas.length
+    );
 
     res.json({
       metas
     });
 
   } catch (error) {
-    console.error("[CATALOG ERROR]", error);
+    console.error(
+      "[CATALOG ERROR]",
+      error
+    );
 
     res.json({
       metas: []
@@ -252,63 +300,92 @@ app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
   }
 });
 
-// Meta
+// =========================
+// META / EPISODES
+// =========================
+
 app.get("/meta/:type/:id.json", async (req, res) => {
   try {
     const type = req.params.type;
-    const encoded = req.params.id
-      .replace(/^faselhd-\d+-/, "");
-
-    const pageUrl = Buffer
-      .from(encoded, "base64url")
-      .toString("utf8");
+    const id = req.params.id;
 
     console.log("[META]");
     console.log("Type:", type);
-    console.log("URL:", pageUrl);
+    console.log("ID:", id);
+
+    let pageUrl = null;
+
+    if (id.startsWith("faselhd-")) {
+      const encoded =
+        id.replace(/^faselhd-\d+-/, "");
+
+      pageUrl = Buffer
+        .from(encoded, "base64url")
+        .toString("utf8");
+    }
+
+    if (!pageUrl) {
+      return res.json({
+        meta: {
+          id,
+          type,
+          name: "FaselHD",
+          videos: []
+        }
+      });
+    }
+
+    console.log(
+      "[META] Page:",
+      pageUrl
+    );
 
     const html = await getHtml(pageUrl);
 
-    const episodes = findEpisodes(html);
+    const episodes =
+      findEpisodes(html);
+
+    console.log(
+      "[META] Episodes:",
+      episodes.length
+    );
 
     if (type !== "series") {
-      res.json({
+      return res.json({
         meta: {
-          id: req.params.id,
+          id,
           type: "movie",
           name: "FaselHD",
           videos: []
         }
       });
-
-      return;
     }
 
-    const videos = episodes.map((ep, index) => ({
-      id:
-        req.params.id +
-        ":" +
-        (ep.number || index + 1),
+    const videos = episodes.map(
+      (ep, index) => ({
+        id:
+          id +
+          ":" +
+          (ep.number || index + 1),
 
-      title:
-        ep.name ||
-        "Episode " + (ep.number || index + 1),
+        title:
+          ep.name ||
+          "Episode " +
+            (ep.number || index + 1),
 
-      season: 1,
+        season: 1,
 
-      episode:
-        ep.number || index + 1,
+        episode:
+          ep.number ||
+          index + 1,
 
-      overview: "",
-
-      thumbnail: undefined
-    }));
-
-    console.log("[META] Episodes:", videos.length);
+        overview: ""
+      })
+    );
 
     res.json({
       meta: {
-        id: req.params.id,
+        id,
         type: "series",
         name: "FaselHD",
         videos
@@ -316,7 +393,10 @@ app.get("/meta/:type/:id.json", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("[META ERROR]", error);
+    console.error(
+      "[META ERROR]",
+      error
+    );
 
     res.json({
       meta: {
@@ -329,7 +409,10 @@ app.get("/meta/:type/:id.json", async (req, res) => {
   }
 });
 
-// Streams
+// =========================
+// STREAM
+// =========================
+
 app.get("/stream/:type/:id.json", async (req, res) => {
   try {
     const type = req.params.type;
@@ -347,28 +430,62 @@ app.get("/stream/:type/:id.json", async (req, res) => {
       const parts = id.split(":");
 
       tmdbId = parts[0];
-      season = parts[1] ? Number(parts[1]) : 1;
-      episode = parts[2] ? Number(parts[2]) : null;
+
+      season =
+        parts[1]
+          ? Number(parts[1])
+          : 1;
+
+      episode =
+        parts[2]
+          ? Number(parts[2])
+          : null;
     }
 
-    const streams = await getStreams(
-      tmdbId,
-      type === "series" ? "tv" : "movie",
-      season,
-      episode
+    console.log(
+      "[STREAM] TMDB:",
+      tmdbId
     );
 
     console.log(
+      "[STREAM] Season:",
+      season
+    );
+
+    console.log(
+      "[STREAM] Episode:",
+      episode
+    );
+
+    const streams =
+      await getStreams(
+        tmdbId,
+        type === "series"
+          ? "tv"
+          : "movie",
+        season,
+        episode
+      );
+
+    console.log(
       "[STREAM] Found:",
-      Array.isArray(streams) ? streams.length : 0
+      Array.isArray(streams)
+        ? streams.length
+        : 0
     );
 
     res.json({
-      streams: Array.isArray(streams) ? streams : []
+      streams:
+        Array.isArray(streams)
+          ? streams
+          : []
     });
 
   } catch (error) {
-    console.error("[STREAM ERROR]", error);
+    console.error(
+      "[STREAM ERROR]",
+      error
+    );
 
     res.json({
       streams: []
@@ -376,8 +493,69 @@ app.get("/stream/:type/:id.json", async (req, res) => {
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    "FaselHD Nuvio Addon running on port " + PORT
-  );
+// =========================
+// TEST FASELHD
+// =========================
+
+app.get("/test-club", async (req, res) => {
+  try {
+    const r = await fetch(
+      "https://faselhd.club/",
+      {
+        headers: {
+          "User-Agent": UA,
+          "Accept":
+            "text/html,application/xhtml+xml,*/*"
+        },
+        redirect: "follow"
+      }
+    );
+
+    const html =
+      await r.text();
+
+    res.json({
+      status: "ok",
+      http: r.status,
+      finalUrl: r.url,
+      length: html.length,
+
+      cloudflare:
+        /Just a moment|cf-chl|challenge-platform/i.test(
+          html
+        ),
+
+      hasPostList:
+        html.includes("postList"),
+
+      hasPlayer:
+        html.includes("player_iframe")
+    });
+
+  } catch (error) {
+    console.error(
+      "[TEST ERROR]",
+      error
+    );
+
+    res.status(500).json({
+      status: "error",
+      message: String(error)
+    });
+  }
 });
+
+// =========================
+// START
+// =========================
+
+app.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      "FaselHD Nuvio Addon running on port " +
+        PORT
+    );
+  }
+);
